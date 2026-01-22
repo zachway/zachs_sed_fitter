@@ -1,4 +1,3 @@
-from astropy.tables import Table
 from glob import glob
 import numpy as np
 import os 
@@ -38,3 +37,35 @@ class phot_filter:
         self.wvl = self.data.T[0]
         self.trans = self.data.T[1]
     
+class model_spectrum:
+    def __init__(self, model_dir, teff, logg, feh):
+        self.teff = teff
+        self.logg = logg
+        self.feh = feh
+        self.model_dir = model_dir
+        self.filename = (
+            f"{self.model_dir}/btsett-cifist+_teff{self.teff}_"
+            f"logg{self.logg}_feh{self.feh}._spec.dat"
+        )
+
+        try:
+            self.data = np.genfromtxt(self.filename, delimiter=" ")
+        except Exception as e:
+            print(f"Something wrong with filename {self.filename}")
+            raise e
+
+        self.wvl = self.data.T[0]*1e4  # convert from microns to Angstroms
+        self.flux = self.data.T[1]  # in erg/s/cm2/Angstrom
+
+    def get_flux_in_filter(self, phot_filter):
+        from scipy.interpolate import interp1d
+        from scipy.integrate import simps
+
+        # Interpolate the filter transmission to the model wavelength grid
+        interp_trans = interp1d(phot_filter.wvl, phot_filter.trans, kind="linear", fill_value=0, bounds_error=False)
+        trans_interp = interp_trans(self.wvl)  # interpolated transmission
+        # Calculate the flux in the filter using the formula
+        numerator = simps(self.flux * trans_interp * self.wvl, self.wvl)
+        denominator = simps(trans_interp * self.wvl, self.wvl)
+        flux_in_filter = numerator / denominator
+        return flux_in_filter
