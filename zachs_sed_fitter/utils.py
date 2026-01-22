@@ -1,12 +1,14 @@
 from glob import glob
 import numpy as np
-import os 
+import os
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 filter_files = glob(f"{dir_path}/filters/*")
-surveys = [ff.split("_")[1].split(".")[0] for ff in filter_files]
-filters = [ff.split(".")[1] for ff in filter_files]
+surveys = [ff.split("/")[-1].split("_")[1].split(".")[0] 
+           for ff in filter_files]
+filters = [ff.split("/")[-1].split(".")[1] 
+           for ff in filter_files]
 
 
 class phot_filter:
@@ -36,7 +38,8 @@ class phot_filter:
 
         self.wvl = self.data.T[0]
         self.trans = self.data.T[1]
-    
+
+
 class model_spectrum:
     def __init__(self, model_dir, teff, logg, feh):
         self.teff = teff
@@ -45,7 +48,7 @@ class model_spectrum:
         self.model_dir = model_dir
         self.filename = (
             f"{self.model_dir}/btsett-cifist+_teff{self.teff}_"
-            f"logg{self.logg}_feh{self.feh}._spec.dat"
+            f"logg{self.logg}_feh{self.feh}_spec.dat"
         )
 
         try:
@@ -62,14 +65,17 @@ class model_spectrum:
         from scipy.integrate import simps
 
         # Interpolate the filter transmission to the model wavelength grid
-        interp_trans = interp1d(phot_filter.wvl, phot_filter.trans, kind="linear", fill_value=0, bounds_error=False)
+        interp_trans = interp1d(phot_filter.wvl, phot_filter.trans,
+                                kind="linear", fill_value=0,
+                                bounds_error=False)
         trans_interp = interp_trans(self.wvl)  # interpolated transmission
         # Calculate the flux in the filter using the formula
         numerator = simps(self.flux * trans_interp * self.wvl, self.wvl)
         denominator = simps(trans_interp * self.wvl, self.wvl)
         flux_in_filter = numerator / denominator
         return flux_in_filter
-    
+
+
 def list_available_models(model_dir):
     model_files = glob(f"{model_dir}/*.dat")
     model_params = []
@@ -78,7 +84,10 @@ def list_available_models(model_dir):
         parts = base.split("_")
         teff = int(parts[1].replace("teff", ""))
         logg = float(parts[2].replace("logg", ""))
-        feh = float(parts[3].replace("feh", "").replace("._spec.dat", ""))
+        feh = float(parts[3].replace("feh", "").replace("_spec.dat", ""))
         model_params.append((teff, logg, feh))
     return model_params
 
+
+def list_available_filters():
+    return [(s, f) for s, f in zip(surveys, filters)]
