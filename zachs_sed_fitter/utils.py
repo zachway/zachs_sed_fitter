@@ -1,6 +1,7 @@
 from glob import glob
 import numpy as np
 import os
+from astropy.io import fits
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -31,7 +32,8 @@ class phot_filter:
                        }
         filter_filename = f"{survey_dict[self.survey]}.{self.filter}.dat"
         try:
-            self.data = np.genfromtxt(filter_filename, delimiter=" ")
+            self.data = np.genfromtxt("filters/" + filter_filename, 
+                                      delimiter=" ")
         except Exception as e:
             print(f"Something wrong with filename {filter_filename}")
             raise e
@@ -41,24 +43,34 @@ class phot_filter:
 
 
 class model_spectrum:
-    def __init__(self, model_dir, teff, logg, feh):
+    def __init__(self, model_dir, teff, logg, feh, ah):
         self.teff = teff
         self.logg = logg
         self.feh = feh
+        self.ah = ah
         self.model_dir = model_dir
-        self.filename = (
-            f"{self.model_dir}/btsett-cifist+_teff{self.teff}_"
-            f"logg{self.logg}_feh{self.feh}_spec.dat"
-        )
+        feh_str = f"+{self.feh}" if self.feh > 0 else f"{self.feh}"
+        ah_str = f"+{self.ah}" if self.ah > 0 else f"{self.ah}"
+        teff_str = str(self.teff).zfill(5)[:3]
+        file_string = (f"{self.model_dir}/*lte{teff_str}-{self.logg}"
+                       f"*{feh_str}*{ah_str}*.fits")
+        possible_files = glob(file_string)
+        if len(possible_files) == 0:
+            raise Exception(f"No model file found for Teff={teff}, "
+                            f"logg={logg}, feh={feh}, ah={ah}")
+        elif len(possible_files) > 1:
+            raise Exception(f"Multiple model files found for Teff={teff},"
+                            f" logg={logg}, feh={feh}, ah={ah}")
+        self.filename = possible_files[0]
 
         try:
-            self.data = np.genfromtxt(self.filename, delimiter=" ")
+            self.data = fits.open(self.filename)
         except Exception as e:
             print(f"Something wrong with filename {self.filename}")
             raise e
 
-        self.wvl = self.data.T[0]*1e4  # convert from microns to Angstroms
-        self.flux = self.data.T[1]  # in erg/s/cm2/Angstrom
+        self.wvl = self.data[1].data['WAVELENGTH']  # in Angstroms
+        self.flux = self.data[1].data['FLUX']  # in erg/s/cm2/Angstrom
 
     def get_flux_in_filter(self, phot_filter):
         from scipy.interpolate import interp1d
@@ -77,15 +89,15 @@ class model_spectrum:
 
 
 def list_available_models(model_dir):
-    model_files = glob(f"{model_dir}/*.dat")
+    model_files = glob(f"{model_dir}/*.fits")
     model_params = []
     for mf in model_files:
         base = os.path.basename(mf)
-        parts = base.split("_")
-        teff = int(parts[1].replace("teff", ""))
-        logg = float(parts[2].replace("logg", ""))
-        feh = float(parts[3].replace("feh", "").replace("_spec.dat", ""))
-        model_params.append((teff, logg, feh))
+        teff = int(base[3:6])*100
+        logg = float(base[7:10])
+        feh = float(base[10:14])
+        ah = float(base[15:19])
+        model_params.append((teff, logg, feh, ah))
     return model_params
 
 

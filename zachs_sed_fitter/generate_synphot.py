@@ -1,4 +1,4 @@
-from zachs_sed_fitter.utils import (
+from utils import (
     model_spectrum,
     phot_filter,
     list_available_models,
@@ -7,9 +7,10 @@ from zachs_sed_fitter.utils import (
 from tqdm import tqdm
 
 
-def generate_synthetic_photometry(model_dir, teff, logg, feh, survey, filter):
+def generate_synthetic_photometry(model_dir, teff, logg,
+                                  feh, ah, survey, filter):
     # Load the model spectrum
-    model_spec = model_spectrum(model_dir, teff, logg, feh)
+    model_spec = model_spectrum(model_dir, teff, logg, feh, ah)
 
     # Load the filter curve
     phot_filt = phot_filter(survey, filter)
@@ -20,16 +21,25 @@ def generate_synthetic_photometry(model_dir, teff, logg, feh, survey, filter):
 def create_fluxes_from_models(model_dir, output_filename):
     filter_survey_pairs = list_available_filters()
     model_params = list_available_models(model_dir)
-    for teff, logg, feh in tqdm(model_params):
+    for teff, logg, feh, ah in tqdm(model_params):
         with open(output_filename, "a") as f:
             for survey, filter in filter_survey_pairs:
                 flux = generate_synthetic_photometry(
-                    model_dir, teff, logg, feh, survey, filter
+                    model_dir, teff, logg, feh, ah, survey, filter
                 )
-                f.write(f"{teff}\t{logg}\t{feh}\t{survey}\t{filter}\t{flux}\n")
+                output_line = (
+                    f"{teff}\t{logg}\t{feh}\t{ah}\t{survey}\t"
+                    f"{filter}\t{flux}\n"
+                )
+                f.write(output_line)
 
 
 if __name__ == "__main__":
-    model_dir = "path_to_model_directory"
-    output_filename = "synthetic_photometry.txt"
+    model_dir = (
+        "/Volumes/ExternalDrive/Comparing_M_Dwarf_Models/"
+        "SyntheticModelLibraries/btsett-cifist"
+    )
+    output_filename = "files/synthetic_photometry.txt"
+    with open(output_filename, "w") as f:
+        f.write("Teff\tlogg\tfeh\tah\tsurvey\tfilter\tflux\n")
     create_fluxes_from_models(model_dir, output_filename)
