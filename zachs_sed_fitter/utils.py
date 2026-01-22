@@ -69,3 +69,16 @@ class model_spectrum:
         denominator = simps(trans_interp * self.wvl, self.wvl)
         flux_in_filter = numerator / denominator
         return flux_in_filter
+    
+def list_available_models(model_dir):
+    model_files = glob(f"{model_dir}/*.dat")
+    model_params = []
+    for mf in model_files:
+        base = os.path.basename(mf)
+        parts = base.split("_")
+        teff = int(parts[1].replace("teff", ""))
+        logg = float(parts[2].replace("logg", ""))
+        feh = float(parts[3].replace("feh", "").replace("._spec.dat", ""))
+        model_params.append((teff, logg, feh))
+    return model_params
+
