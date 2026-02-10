@@ -2,6 +2,7 @@ from glob import glob
 import numpy as np
 import os
 from astropy.io import fits
+from astroquery.simbad import Simbad
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -43,17 +44,18 @@ class phot_filter:
 
 
 class model_spectrum:
-    def __init__(self, model_dir, teff, logg, feh, ah):
+    def __init__(self, model_dir, teff, logg, feh, ah, file_type):
         self.teff = teff
         self.logg = logg
         self.feh = feh
         self.ah = ah
+        self.file_type = file_type
         self.model_dir = model_dir
         feh_str = f"+{self.feh}" if self.feh > 0 else f"{self.feh}"
         ah_str = f"+{self.ah}" if self.ah > 0 else f"{self.ah}"
         teff_str = str(self.teff).zfill(5)[:3]
         file_string = (f"{self.model_dir}/*lte{teff_str}-{self.logg}"
-                       f"*{feh_str}*{ah_str}*.fits")
+                       f"*{feh_str}*{ah_str}*.{self.file_type}")
         possible_files = glob(file_string)
         if len(possible_files) == 0:
             raise Exception(f"No model file found for Teff={teff}, "
@@ -69,8 +71,23 @@ class model_spectrum:
             print(f"Something wrong with filename {self.filename}")
             raise e
 
-        self.wvl = self.data[1].data['WAVELENGTH']  # in Angstroms
-        self.flux = self.data[1].data['FLUX']  # in erg/s/cm2/Angstrom
+        if self.file_type=="fits":
+            self.wvl = self.data[1].data['WAVELENGTH']  # in Angstroms
+            self.flux = self.data[1].data['FLUX']  # in erg/s/cm2/Angstrom
+        
+        # functionality from https://github.com/pkgw/pwkit/blob/388f1b049a4f95a41e46c4a256927d4a96532944/pwkit/phoenix.py
+        elif self.file_type=="7":
+            try:
+                self.wvl, self.lflam = np.loadtxt(self.filename, usecols=(0, 1)).T
+            except ValueError:
+                with open(self.filename, "rb") as f:
+                    def lines():
+                        for line in f:
+                            yield line.replace(b"D", b"e")
+                    self.wvl, self.lflam = np.genfromtxt(lines(), delimiter=(13, 12)).T
+
+            self.flux = 10**(self.lflam - 8.0)  # convert from log to linear flux in erg/s/cm2/Angstrom
+
 
     def get_flux_in_filter(self, phot_filter):
         from scipy.interpolate import interp1d
@@ -89,17 +106,43 @@ class model_spectrum:
 
 
 def list_available_models(model_dir):
-    model_files = glob(f"{model_dir}/*.fits")
+    model_files = glob(f"{model_dir}/*.fits") + glob(f"{model_dir}/*.7")
     model_params = []
     for mf in model_files:
-        base = os.path.basename(mf)
-        teff = int(base[3:6])*100
-        logg = float(base[7:10])
-        feh = float(base[10:14])
-        ah = float(base[15:19])
-        model_params.append((teff, logg, feh, ah))
+        if mf[-5:] == ".fits":
+            base = os.path.basename(mf)
+            teff = int(base[3:6])*100
+            logg = float(base[7:10])
+            feh = float(base[10:14])
+            ah = float(base[15:19])
+            file_type = "fits"
+            model_params.append((teff, logg, feh, ah, file_type))
+        elif mf[-2:] == ".7":
+            base = os.path.basename(mf)
+            teff = int(base[3:6])*100
+            logg = float(base[7:10])
+            feh = float(base[10:14])
+            ah = float(base[15:19])
+            file_type = "7"
+            model_params.append((teff, logg, feh, ah, file_type))
     return model_params
 
 
 def list_available_filters():
     return [(s, f) for s, f in zip(surveys, filters)]
+
+def get_starphot(name, save=False):
+    result_table = Simbad.query_object(name)
+    if result_table is None:
+        raise Exception(f"No SIMBAD entry found for {name}")
+    photometry = {}
+    for col in result_table.colnames:
+        if col.startswith("FLUX_"):
+            band = col.split("_")[1]
+            photometry[band] = result_table[col][0]
+    if save:
+        with open(f"starphot/{name}_photometry.txt", "w") as f:
+            for band, flux in photometry.items():
+                f.write(f"{band}\t{flux}\n")
+
+    return photometry

@@ -8,9 +8,9 @@ from tqdm import tqdm
 
 
 def generate_synthetic_photometry(model_dir, teff, logg,
-                                  feh, ah, survey, filter):
+                                  feh, ah, file_type, survey, filter):
     # Load the model spectrum
-    model_spec = model_spectrum(model_dir, teff, logg, feh, ah)
+    model_spec = model_spectrum(model_dir, teff, logg, feh, ah, file_type)
 
     # Load the filter curve
     phot_filt = phot_filter(survey, filter)
@@ -21,14 +21,14 @@ def generate_synthetic_photometry(model_dir, teff, logg,
 def create_fluxes_from_models(model_dir, output_filename):
     filter_survey_pairs = list_available_filters()
     model_params = list_available_models(model_dir)
-    for teff, logg, feh, ah in tqdm(model_params):
+    for teff, logg, feh, ah, file_type in tqdm(model_params):
         with open(output_filename, "a") as f:
             for survey, filter in filter_survey_pairs:
                 flux = generate_synthetic_photometry(
-                    model_dir, teff, logg, feh, ah, survey, filter
+                    model_dir, teff, logg, feh, ah, file_type, survey, filter
                 )
                 output_line = (
-                    f"{teff}\t{logg}\t{feh}\t{ah}\t{survey}\t"
+                    f"{teff}\t{logg}\t{feh}\t{ah}\t{file_type}\t{survey}\t"
                     f"{filter}\t{flux}\n"
                 )
                 f.write(output_line)
@@ -41,5 +41,5 @@ if __name__ == "__main__":
     )
     output_filename = "files/synthetic_photometry.txt"
     with open(output_filename, "w") as f:
-        f.write("Teff\tlogg\tfeh\tah\tsurvey\tfilter\tflux\n")
+        f.write("Teff\tlogg\tfeh\tah\tfile_type\tsurvey\tfilter\tflux\n")
     create_fluxes_from_models(model_dir, output_filename)
