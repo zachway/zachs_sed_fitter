@@ -1,7 +1,10 @@
 from glob import glob
+from unittest import result
+#from unittest import result
 import numpy as np
 import os
 from astropy.io import fits
+from astropy.table import Table
 #from astroquery.simbad import Simbad
 from astroquery.gaia import Gaia
 
@@ -13,6 +16,19 @@ surveys = [ff.split("/")[-1].split("_")[1].split(".")[0]
 filters = [ff.split("/")[-1].split(".")[1] 
            for ff in filter_files]
 
+
+def get_filter_zero_point(survey, filter):
+    zero_points = {"WISE" : {"W1": 8.18e-12, "W2": 2.42e-12, "W3": 6.52e-14, "W4": 5.09e-15},
+                   "2MASS" : {"J": 3.13e-10, "H": 1.13e-10, "Ks": 4.28e-11},
+                   "GAIA3" : {"G": 2.5e-9, "Gbp": 4.08e-9, "Grp": 1.27e-9},
+                   }
+    
+    if survey not in zero_points or filter not in zero_points[survey]:
+        raise Exception(f"Survey {survey} and filter {filter} not in the "
+                        f"valid surveys ({list(zero_points.keys())}) and "
+                        f"filters ({[f for s in zero_points.values() for f in s.keys()]})")
+    
+    return zero_points[survey][filter]
 
 class phot_filter:
     def __init__(self, survey, filter):
@@ -42,6 +58,8 @@ class phot_filter:
 
         self.wvl = self.data.T[0]
         self.trans = self.data.T[1]
+
+
 
 
 class model_spectrum:
@@ -81,18 +99,21 @@ class model_spectrum:
         # functionality from https://github.com/pkgw/pwkit/blob/388f1b049a4f95a41e46c4a256927d4a96532944/pwkit/phoenix.py
         elif self.file_type=="7":
             try:
-                self.wvl, self.lflam = np.loadtxt(self.filename, usecols=(0, 1)).T
+                self.wvl, self.lflam, self.lblam = np.loadtxt(self.filename, usecols=(0, 1, 2)).T
             except ValueError:
                 with open(self.filename, "rb") as f:
                     def lines():
                         for line in f:
                             yield line.replace(b"D", b"e")
-                    self.wvl, self.lflam = np.genfromtxt(lines(), delimiter=(13, 13)).T
+                    self.wvl, self.lflam, self.lblam = np.genfromtxt(lines(), delimiter=(13, 13, 13)).T
 
             self.flux = 10**(self.lflam - 8.0)  # convert from log to linear flux in erg/s/cm2/Angstrom
+            self.bflux = 10**(self.lblam - 8.0)  # convert from log to linear flux in erg/s/cm2/Angstrom
 
             self.flux = self.flux[np.argsort(self.wvl)]
             self.lflam = self.lflam[np.argsort(self.wvl)]
+            self.lblam = self.lblam[np.argsort(self.wvl)]
+            self.bflux = self.bflux[np.argsort(self.wvl)]
             self.wvl = self.wvl[np.argsort(self.wvl)]
 
 
@@ -152,33 +173,23 @@ def get_starphot(gaia_source_id, save=False):
     # REMINDER: get fluxes instead of magnitudes, and convert to same units as synthetic photometry
     Gaia.ROW_LIMIT = 2
     job = Gaia.launch_job_async(
-        f"WITH cte AS (SELECT TOP 1 source_id FROM gaiadr3.gaia_source WHERE source_id={gaia_source_id}) "
-        "SELECT dr3.source_id, dr3.ra, dr3.dec, dr3.pmra, dr3.pmdec, "
-        "dr3.parallax, radial_velocity, radial_velocity_error, "
-        "phot_g_mean_mag, phot_rp_mean_mag, phot_bp_mean_mag, "
-        "phot_bp_rp_excess_factor, ruwe, ipd_frac_multi_peak, "
-        "ipd_frac_odd_win, ipd_gof_harmonic_amplitude, "
-        "duplicated_source, rv_chisq_pvalue, rv_renormalised_gof, "
-        "rv_nb_transits, tmass.j_m, tmass.j_msigcom, tmass.h_m, "
-        "tmass.h_msigcom, tmass.ks_m, tmass.ks_msigcom, "
-        "allwise.w1mpro, allwise.w1mpro_error, allwise.w2mpro, "
-        "allwise.w2mpro_error, allwise.w3mpro, allwise.w3mpro_error, "
-        "allwise.w4mpro, allwise.w4mpro_error, * "
-        "FROM cte "
-        "LEFT JOIN gaiadr3.gaia_source dr3 ON cte.source_id = dr3.source_id "
+        "SELECT * "
+        "FROM gaiadr3.gaia_source dr3"
         "LEFT JOIN gaiadr3.allwise_best_neighbour AS a_xmatch "
-        "ON (cte.source_id = a_xmatch.source_id) "
+        "USING (source_id) "
         "LEFT JOIN gaiadr1.allwise_original_valid AS allwise "
-        "ON (a_xmatch.allwise_oid = allwise.allwise_oid) "
+        "USING (allwise_oid) "
         "LEFT JOIN gaiadr3.tmass_psc_xsc_best_neighbour AS xmatch "
-        "ON (cte.source_id = xmatch.source_id) "
+        "USING (source_id) "
         "LEFT JOIN gaiadr3.tmass_psc_xsc_join AS xjoin "
-        "ON (xmatch.clean_tmass_psc_xsc_oid = xjoin.clean_tmass_psc_xsc_oid) "
-        "LEFT JOIN gaiadr1.tmass_original_valid AS tmass ON "
-        "xjoin.original_psc_source_id = tmass.designation "
+        "USING (clean_tmass_psc_xsc_oid) "
+        "LEFT JOIN gaiadr1.tmass_original_valid AS tmass "
+		"ON  xjoin.original_psc_source_id = tmass.designation "
         "LEFT JOIN gaiadr3.synthetic_photometry_gspc AS gaia_synth "
-        "ON (cte.source_id = gaia_synth.source_id) "
+        "USING (source_id) "
+        f"WHERE dr3.source_id={gaia_source_id}"
     )
+
     result = job.get_results()
     if len(result) == 0:
         raise Exception(f"No results found for Gaia source ID {gaia_source_id}")
@@ -186,13 +197,45 @@ def get_starphot(gaia_source_id, save=False):
         raise Exception(f"Multiple results found for Gaia source ID {gaia_source_id}")
     
     #if save:
-    #   with open(f"starphot/{name}_photometry.txt", "w") as f:
-    #        for band, flux in photometry.items():
-    #            f.write(f"{band}\t{flux}\n")
+    #   result.write_csv(f"starphot/{gaia_source_id}_starphot.csv")
 
     return result
 
-if __name__ == "__main__":
+def load_starphot(gaia_source_id):
+    # REMINDER: figure out errors
+    filename = glob(f"starphot/{gaia_source_id}*.csv")
+    if not filename:
+        raise FileNotFoundError(f"No starphot file found for Gaia source ID {gaia_source_id}")
+    try:
+        result = Table.read(filename[0], delimiter=",")
+    except Exception as e:
+        print(f"Error loading starphot for Gaia source ID {gaia_source_id}: {e}")
+        raise e
+    
+    filter_to_csv_col = {"G": "phot_g_mean_mag",
+                         "Gbp": "phot_bp_mean_mag",
+                         "Grp": "phot_rp_mean_mag",
+                         "W1": "w1mpro",
+                         "W2": "w2mpro",
+                         "W3": "w3mpro",
+                         "W4": "w4mpro",
+                         "J": "j_m",
+                         "H": "h_m",
+                         "Ks": "ks_m",
+                         }
+    
+    for survey, filter in list_available_filters():
+        csv_col = filter_to_csv_col.get(filter)
+        if csv_col is None:
+            raise Exception(f"No CSV column mapping found for filter {filter}")
+        if csv_col not in result.colnames:
+            raise Exception(f"CSV column {csv_col} not found in starphot data for Gaia source ID {gaia_source_id}")
+        
+        result[filter]= 10**(-result[csv_col]/2.5) * get_filter_zero_point(survey, filter)
+
+    return result
+
+#if __name__ == "__main__":
     # # Example usage
     # model_dir = "models/phoenix"
     # teff = 5000
@@ -209,5 +252,5 @@ if __name__ == "__main__":
     # flux_in_filter = model_spec.get_flux_in_filter(phot_filt)
     # print(f"Flux in {survey} {filter_name} filter: {flux_in_filter}")
 
-    result = get_starphot(gaia_source_id=6583864876821240576)
-    print(result)
+    #result = get_starphot(gaia_source_id=6583864876821240576)
+    #print(result)
