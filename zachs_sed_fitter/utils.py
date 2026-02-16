@@ -6,7 +6,6 @@ import os
 from astropy.io import fits
 from astropy.table import Table
 #from astroquery.simbad import Simbad
-from astroquery.gaia import Gaia
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -169,27 +168,13 @@ def list_available_filters():
 
 
 def get_starphot(gaia_source_id, save=False):
+    from astroquery.gaia import Gaia
+    Gaia.login()
     # REMINDER: test when Gaia Archive is back up
     # REMINDER: get fluxes instead of magnitudes, and convert to same units as synthetic photometry
     Gaia.ROW_LIMIT = 2
-    job = Gaia.launch_job_async(
-        "SELECT * "
-        "FROM gaiadr3.gaia_source dr3"
-        "LEFT JOIN gaiadr3.allwise_best_neighbour AS a_xmatch "
-        "USING (source_id) "
-        "LEFT JOIN gaiadr1.allwise_original_valid AS allwise "
-        "USING (allwise_oid) "
-        "LEFT JOIN gaiadr3.tmass_psc_xsc_best_neighbour AS xmatch "
-        "USING (source_id) "
-        "LEFT JOIN gaiadr3.tmass_psc_xsc_join AS xjoin "
-        "USING (clean_tmass_psc_xsc_oid) "
-        "LEFT JOIN gaiadr1.tmass_original_valid AS tmass "
-		"ON  xjoin.original_psc_source_id = tmass.designation "
-        "LEFT JOIN gaiadr3.synthetic_photometry_gspc AS gaia_synth "
-        "USING (source_id) "
-        f"WHERE dr3.source_id={gaia_source_id}"
-    )
-
+    query = f"WITH cte AS (SELECT TOP 1 source_id FROM gaiadr3.gaia_source WHERE source_id = {gaia_source_id}) SELECT dr3.source_id, dr3.ra, dr3.dec, dr3.pmra, dr3.pmdec, dr3.parallax, dr3.radial_velocity, dr3.radial_velocity_error, dr3.phot_g_mean_mag, dr3.phot_rp_mean_mag, dr3.phot_bp_mean_mag, dr3.phot_bp_rp_excess_factor, dr3.ruwe, dr3.ipd_frac_multi_peak, dr3.ipd_frac_odd_win, dr3.ipd_gof_harmonic_amplitude, dr3.duplicated_source, dr3.rv_chisq_pvalue, dr3.rv_renormalised_gof, dr3.rv_nb_transits, tmass.j_m, tmass.j_msigcom, tmass.h_m, tmass.h_msigcom, tmass.ks_m, tmass.ks_msigcom, allwise.w1mpro, allwise.w1mpro_error, allwise.w2mpro, allwise.w2mpro_error, allwise.w3mpro, allwise.w3mpro_error, allwise.w4mpro, allwise.w4mpro_error, gaia_synth.* FROM cte LEFT JOIN gaiadr3.gaia_source AS dr3 ON cte.source_id = dr3.source_id LEFT JOIN gaiadr3.allwise_best_neighbour AS a_xmatch ON cte.source_id = a_xmatch.source_id LEFT JOIN gaiadr1.allwise_original_valid AS allwise ON a_xmatch.allwise_oid = allwise.allwise_oid LEFT JOIN gaiadr3.tmass_psc_xsc_best_neighbour AS xmatch ON cte.source_id = xmatch.source_id LEFT JOIN gaiadr3.tmass_psc_xsc_join AS xjoin ON xmatch.clean_tmass_psc_xsc_oid = xjoin.clean_tmass_psc_xsc_oid LEFT JOIN gaiadr1.tmass_original_valid AS tmass ON xjoin.original_psc_source_id = tmass.designation LEFT JOIN gaiadr3.synthetic_photometry_gspc AS gaia_synth ON cte.source_id = gaia_synth.source_id"
+    job = Gaia.launch_job_async(query)
     result = job.get_results()
     if len(result) == 0:
         raise Exception(f"No results found for Gaia source ID {gaia_source_id}")
