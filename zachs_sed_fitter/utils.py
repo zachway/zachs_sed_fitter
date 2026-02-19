@@ -72,7 +72,9 @@ class model_spectrum:
         logg_str = f"+{-self.logg}" if self.logg < 0 else f"-{self.logg}"
         feh_str = f"+{self.feh}" if self.feh > 0 else f"{self.feh}"
         ah_str = f"+{self.ah}" if self.ah > 0 else f"{self.ah}"
-        teff_str = str(self.teff).zfill(5)[:3]
+        teff_str = str(self.teff/100).zfill(5)
+        if teff_str[-1] == "0":
+            teff_str = teff_str[:-2]
         file_string = (f"{self.model_dir}/*lte{teff_str}{logg_str}"
                        f"*{feh_str}*{ah_str}*.{self.file_type}")
         possible_files = glob(file_string)
@@ -169,7 +171,7 @@ def list_available_filters():
 
 def get_starphot(gaia_source_id, save=False):
     from astroquery.gaia import Gaia
-    Gaia.login()
+    #Gaia.login()
     # REMINDER: test when Gaia Archive is back up
     # REMINDER: get fluxes instead of magnitudes, and convert to same units as synthetic photometry
     Gaia.ROW_LIMIT = 2
@@ -186,6 +188,7 @@ def get_starphot(gaia_source_id, save=False):
 
     return result
 
+
 def load_starphot(gaia_source_id):
     # REMINDER: figure out errors
     filename = glob(f"starphot/{gaia_source_id}*.csv")
@@ -196,7 +199,7 @@ def load_starphot(gaia_source_id):
     except Exception as e:
         print(f"Error loading starphot for Gaia source ID {gaia_source_id}: {e}")
         raise e
-    
+
     filter_to_csv_col = {"G": "phot_g_mean_mag",
                          "Gbp": "phot_bp_mean_mag",
                          "Grp": "phot_rp_mean_mag",
@@ -208,7 +211,7 @@ def load_starphot(gaia_source_id):
                          "H": "h_m",
                          "Ks": "ks_m",
                          }
-    
+
     for survey, filter in list_available_filters():
         csv_col = filter_to_csv_col.get(filter)
         if csv_col is None:
@@ -220,7 +223,7 @@ def load_starphot(gaia_source_id):
 
     return result
 
-#if __name__ == "__main__":
+if __name__ == "__main__":
     # # Example usage
     # model_dir = "models/phoenix"
     # teff = 5000
@@ -237,5 +240,5 @@ def load_starphot(gaia_source_id):
     # flux_in_filter = model_spec.get_flux_in_filter(phot_filt)
     # print(f"Flux in {survey} {filter_name} filter: {flux_in_filter}")
 
-    #result = get_starphot(gaia_source_id=6583864876821240576)
-    #print(result)
+    result = get_starphot(gaia_source_id=6583864876821240576)
+    print(result)

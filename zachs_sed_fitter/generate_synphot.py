@@ -25,17 +25,23 @@ def create_fluxes_from_models(model_dir, output_filename, ncores=1):
     filter_survey_pairs = list_available_filters()
     model_params = list_available_models(model_dir)
 
+    with open(output_filename, "w") as f:
+        f.write(f"Teff\tlogg\tfeh\tah\tfile_type\t"
+                f"{'\t'.join(map(str, [fsp[1] for fsp in filter_survey_pairs]))}\n"
+                )
+
     def process_model(teff, logg, feh, ah, file_type):
         with open(output_filename, "a") as f:
+            flux_ = []
             for survey, filter in filter_survey_pairs:
-                flux = generate_synthetic_photometry(
+                flux_.append(generate_synthetic_photometry(
                     model_dir, teff, logg, feh, ah, file_type, survey, filter
-                )
-                output_line = (
-                    f"{teff}\t{logg}\t{feh}\t{ah}\t{file_type}\t{survey}\t"
-                    f"{filter}\t{flux}\n"
-                )
-                f.write(output_line)
+                ))
+            output_line = (
+                f"{teff}\t{logg}\t{feh}\t{ah}\t{file_type}\t"
+                f"{'\t'.join(map(str, flux_))}\n"
+            )
+            f.write(output_line)
 
     Parallel(n_jobs=ncores)(
         delayed(process_model)(teff, logg, feh, ah, file_type)
@@ -61,6 +67,5 @@ if __name__ == "__main__":
         "MODELOS_BTSESTTLCIFIST_TEST"
     )
     output_filename = "files/synthetic_photometry.txt"
-    with open(output_filename, "w") as f:
-        f.write("Teff\tlogg\tfeh\tah\tfile_type\tsurvey\tfilter\tflux\n")
+
     create_fluxes_from_models(model_dir, output_filename, ncores=7)
