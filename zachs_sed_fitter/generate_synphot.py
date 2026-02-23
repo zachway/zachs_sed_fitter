@@ -47,19 +47,7 @@ def create_fluxes_from_models(model_dir, output_filename, ncores=1):
         delayed(process_model)(teff, logg, feh, ah, file_type)
         for teff, logg, feh, ah, file_type in tqdm(model_params)
     )
-
-class starphot:
-    def __init__(self, gaia_source_id):
-        self.gaia_source_id = gaia_source_id
-        self.data = load_starphot(gaia_source_id)
     
-    def get_flux_in_filter(self, survey, filter):
-        row = self.data[(self.data["survey"] == survey) & (self.data["filter"] == filter)]
-        if len(row) == 0:
-            raise ValueError(f"No data found for survey {survey} and filter {filter}")
-        elif len(row) > 1:
-            raise ValueError(f"Multiple rows found for survey {survey} and filter {filter}")
-        return row["flux"][0]
 
 if __name__ == "__main__":
     model_dir = (

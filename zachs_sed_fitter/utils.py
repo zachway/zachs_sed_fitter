@@ -22,12 +22,33 @@ def get_filter_zero_point(survey, filter):
                    "GAIA3" : {"G": 2.5e-9, "Gbp": 4.08e-9, "Grp": 1.27e-9},
                    }
     
-    if survey not in zero_points or filter not in zero_points[survey]:
-        raise Exception(f"Survey {survey} and filter {filter} not in the "
+    if type(filter) == str:
+        if survey not in zero_points or filter not in zero_points[survey]:
+            raise Exception(f"Survey {survey} and filter {filter} not in the "
                         f"valid surveys ({list(zero_points.keys())}) and "
                         f"filters ({[f for s in zero_points.values() for f in s.keys()]})")
+        return zero_points[survey][filter]
     
-    return zero_points[survey][filter]
+    else:
+        return [zero_points[s][f] for s, f in zip(survey, filter)]
+
+
+
+
+def get_filter_wavelength_vals(filter):
+    # ordered lambda min, lambda max, lambda effective
+    filter_ranges = {"W1": (27540.97, 38723.88, 33526.00), "W2": (39633.26, 53413.60, 46028.00), "W3": (74430.44, 172613.43, 115608.00), "W4": (195200.83, 279107.24, 220883.00),
+                     "J": (10690.53, 14208.52, 12350.00), "H": (14465.17, 18277.23, 16620.00), "Ks": (19402.19, 23810.79, 21590.00),
+                     "G": (3309.13, 10381.71, 5822.39), "Gbp": (3301.83, 6739.34, 5035.75), "Grp": (6200.46, 10465.57, 7619.96),
+                     }
+    
+    if type(filter) == str:
+        if filter not in filter_ranges:
+            raise Exception(f"Filter {filter} not in the valid filters "
+                            f"{list(filter_ranges.keys())}")
+        return filter_ranges[filter]
+    else:
+        return [filter_ranges[f] for f in filter]
 
 class phot_filter:
     def __init__(self, survey, filter):
@@ -57,8 +78,6 @@ class phot_filter:
 
         self.wvl = self.data.T[0]
         self.trans = self.data.T[1]
-
-
 
 
 class model_spectrum:
