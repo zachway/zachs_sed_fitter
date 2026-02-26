@@ -4,3 +4,6 @@ zachs_sed_fitter/starphot/6583864876821240576_starphot-result.csv
 zachs_sed_fitter/__pycache__/fit.cpython-312.pyc
 .gitignore
 zachs_sed_fitter/files/interpolated_grid.npz
+zachs_sed_fitter/starphot/2762664699324800_starphot.csv
+.gitignore
+zachs_sed_fitter/starphot/4392445873838720_starphot.csv

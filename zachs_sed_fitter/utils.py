@@ -202,8 +202,8 @@ def get_starphot(gaia_source_id, save=False):
     elif len(result) > 1:
         raise Exception(f"Multiple results found for Gaia source ID {gaia_source_id}")
     
-    #if save:
-    #   result.write_csv(f"starphot/{gaia_source_id}_starphot.csv")
+    if save:
+       result.write(f"starphot/{gaia_source_id}_starphot.csv")
 
     return result
 
@@ -259,5 +259,5 @@ if __name__ == "__main__":
     # flux_in_filter = model_spec.get_flux_in_filter(phot_filt)
     # print(f"Flux in {survey} {filter_name} filter: {flux_in_filter}")
 
-    result = get_starphot(gaia_source_id=6583864876821240576)
+    result = get_starphot(gaia_source_id=2762664699324800, save=True)
     print(result)
