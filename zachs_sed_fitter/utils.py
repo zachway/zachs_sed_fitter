@@ -139,7 +139,7 @@ class model_spectrum:
 
     def get_flux_in_filter(self, phot_filter):
         from scipy.interpolate import interp1d
-        from scipy.integrate import simps
+        from scipy.integrate import simpson
 
         # Interpolate the filter transmission to the model wavelength grid
         interp_trans = interp1d(phot_filter.wvl, phot_filter.trans,
@@ -147,8 +147,8 @@ class model_spectrum:
                                 bounds_error=False)
         trans_interp = interp_trans(self.wvl)  # interpolated transmission
         # Calculate the flux in the filter using the formula
-        numerator = simps(self.flux * trans_interp * self.wvl, self.wvl)
-        denominator = simps(trans_interp * self.wvl, self.wvl)
+        numerator = simpson(self.flux * trans_interp * self.wvl, self.wvl)
+        denominator = simpson(trans_interp * self.wvl, self.wvl)
         flux_in_filter = numerator / denominator
         return flux_in_filter
 
